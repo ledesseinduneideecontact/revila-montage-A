@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Film, Save, RotateCcw } from 'lucide-react';
+import { Film, Save, RotateCcw, TestTube } from 'lucide-react';
 import FileUpload from './components/FileUpload';
 import Timeline from './components/Timeline';
 import TransitionSelector from './components/TransitionSelector';
 import AudioControls from './components/AudioControls';
 import PreviewPlayer from './components/PreviewPlayer';
 import ExportPanel from './components/ExportPanel';
+import TestPage from './components/TestPage';
 import ffmpegService from './services/ffmpeg.service';
 import simplePreviewService from './services/simple-preview.service';
 import backendService from './services/backend.service';
@@ -40,6 +41,7 @@ function App() {
   const [isFFmpegLoaded, setIsFFmpegLoaded] = useState(false);
   const [backendAvailable, setBackendAvailable] = useState(false);
   const [projectName, setProjectName] = useState('My Video Project');
+  const [currentPage, setCurrentPage] = useState<'app' | 'test'>('app');
 
   useEffect(() => {
     loadFFmpeg();
@@ -361,6 +363,29 @@ function App() {
 
   const audioFile = mediaFiles.find(f => f.type === 'audio');
 
+  // Gérer la navigation basée sur le hash
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.slice(1); // Enlever le #
+      if (hash === 'test') {
+        setCurrentPage('test');
+      } else {
+        setCurrentPage('app');
+      }
+    };
+
+    // Vérifier le hash initial
+    handleHashChange();
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  // Afficher la page de test si demandée
+  if (currentPage === 'test') {
+    return <TestPage />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-100">
       <header className="bg-white shadow-sm border-b">
@@ -371,6 +396,13 @@ function App() {
               <h1 className="text-xl font-bold">Video Editor</h1>
             </div>
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => window.location.hash = '#test'}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-blue-600 rounded-md hover:bg-blue-700 flex items-center gap-2"
+              >
+                <TestTube className="w-4 h-4" />
+                Test Backend
+              </button>
               <button
                 onClick={handleNewProject}
                 className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 flex items-center gap-2"
