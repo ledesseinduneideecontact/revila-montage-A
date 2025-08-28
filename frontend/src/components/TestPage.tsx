@@ -63,7 +63,7 @@ const TestPage: React.FC = () => {
       const result = await backendService.simpleExport([{
         id: 'test-1',
         name: 'test.txt',
-        type: 'text/plain',
+        type: 'audio' as any, // Type temporaire pour le test
         file: testFile,
         url: '',
         duration: 0
