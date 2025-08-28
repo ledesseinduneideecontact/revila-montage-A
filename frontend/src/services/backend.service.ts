@@ -94,8 +94,7 @@ class BackendService {
       const formData = new FormData();
       
       // Trouver les fichiers média dans la timeline
-      const mediaIds = timeline.map(t => t.mediaId);
-      const timelineMediaIds = mediaIds.filter((id, index) => mediaIds.indexOf(id) === index);
+      const timelineMediaIds = Array.from(new Set(timeline.map(t => t.mediaId)));
       const relevantMedia = mediaFiles.filter(m => timelineMediaIds.includes(m.id));
       
       if (relevantMedia.length === 0) {

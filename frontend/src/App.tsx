@@ -8,7 +8,6 @@ import PreviewPlayer from './components/PreviewPlayer';
 import ExportPanel from './components/ExportPanel';
 import ffmpegService from './services/ffmpeg.service';
 import simplePreviewService from './services/simple-preview.service';
-import canvasVideoService from './services/canvas-video.service';
 import backendService from './services/backend.service';
 import {
   MediaFile,
