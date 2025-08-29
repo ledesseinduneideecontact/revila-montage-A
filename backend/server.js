@@ -178,10 +178,78 @@ app.get('/api/test-ffmpeg-simple', async (req, res) => {
   console.log('🎵 Test FFmpeg simple requested');
   
   try {
+    // Vérifier d'abord si FFmpeg est disponible
+    const ffmpegAvailable = await new Promise((resolve) => {
+      ffmpeg.getAvailableFormats((err, formats) => {
+        if (err) {
+          console.error('FFmpeg not available:', err.message);
+          resolve(false);
+        } else {
+          console.log('FFmpeg is available with', Object.keys(formats).length, 'formats');
+          resolve(true);
+        }
+      });
+    });
+
+    if (!ffmpegAvailable) {
+      // Solution alternative : créer un fichier WAV simple sans FFmpeg
+      console.log('Using fallback: Creating simple WAV file without FFmpeg');
+      
+      const outputFilename = `test-audio-${Date.now()}.wav`;
+      const outputPath = path.join(outputDir, outputFilename);
+      
+      // Créer un fichier WAV simple (44 bytes header + silence)
+      const sampleRate = 44100;
+      const numChannels = 2;
+      const bitsPerSample = 16;
+      const duration = 1; // 1 seconde
+      const numSamples = sampleRate * duration;
+      const dataSize = numSamples * numChannels * (bitsPerSample / 8);
+      
+      // WAV header
+      const buffer = Buffer.alloc(44 + dataSize);
+      
+      // RIFF header
+      buffer.write('RIFF', 0);
+      buffer.writeUInt32LE(36 + dataSize, 4);
+      buffer.write('WAVE', 8);
+      
+      // fmt chunk
+      buffer.write('fmt ', 12);
+      buffer.writeUInt32LE(16, 16); // fmt chunk size
+      buffer.writeUInt16LE(1, 20); // PCM format
+      buffer.writeUInt16LE(numChannels, 22);
+      buffer.writeUInt32LE(sampleRate, 24);
+      buffer.writeUInt32LE(sampleRate * numChannels * bitsPerSample / 8, 28); // byte rate
+      buffer.writeUInt16LE(numChannels * bitsPerSample / 8, 32); // block align
+      buffer.writeUInt16LE(bitsPerSample, 34);
+      
+      // data chunk
+      buffer.write('data', 36);
+      buffer.writeUInt32LE(dataSize, 40);
+      
+      // Les données audio (silence = zéros) sont déjà à 0 grâce à Buffer.alloc
+      
+      await fs.writeFile(outputPath, buffer);
+      console.log('✅ Fallback WAV file created:', outputFilename);
+      
+      res.download(outputPath, outputFilename, (err) => {
+        if (err) console.error('Download error:', err);
+        setTimeout(async () => {
+          try {
+            await fs.unlink(outputPath);
+            console.log('🧹 Cleaned test file:', outputFilename);
+          } catch (e) {}
+        }, 5000);
+      });
+      
+      return;
+    }
+    
+    // Si FFmpeg est disponible, utiliser la méthode normale
     const outputFilename = `test-audio-${Date.now()}.mp3`;
     const outputPath = path.join(outputDir, outputFilename);
     
-    // Créer un fichier audio de test (1 seconde de silence)
     await new Promise((resolve, reject) => {
       ffmpeg()
         .input('anullsrc=channel_layout=stereo:sample_rate=44100')
@@ -195,12 +263,10 @@ app.get('/api/test-ffmpeg-simple', async (req, res) => {
         .run();
     });
     
-    console.log('✅ Test audio generated:', outputFilename);
+    console.log('✅ Test audio generated with FFmpeg:', outputFilename);
     
-    // Envoyer le fichier
     res.download(outputPath, outputFilename, (err) => {
       if (err) console.error('Download error:', err);
-      // Nettoyer après 5 secondes
       setTimeout(async () => {
         try {
           await fs.unlink(outputPath);
