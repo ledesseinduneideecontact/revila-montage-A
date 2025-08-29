@@ -20,7 +20,7 @@ export interface TimelineItem {
   transitionDuration?: number;
 }
 
-export type TransitionType = 'crossfade' | 'fade' | 'slide-left' | 'slide-right' | 'wipe' | 'cut';
+export type TransitionType = 'none' | 'crossfade' | 'fade' | 'slide-left' | 'slide-right' | 'wipe' | 'cut';
 
 export interface AudioSettings {
   masterVolume: number;

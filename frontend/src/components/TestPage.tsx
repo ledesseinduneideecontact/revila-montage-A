@@ -71,8 +71,9 @@ const TestPage: React.FC = () => {
         id: 'timeline-1',
         mediaId: 'test-1',
         startTime: 0,
+        endTime: 5,
         duration: 5,
-        transition: 'none'
+        transition: 'none' as const
       }]);
 
       console.log('Upload test result:', result);
