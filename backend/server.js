@@ -30,13 +30,38 @@ const PORT = process.env.PORT || 5000;
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:3001',
+  'https://patient-education-production-7b56.up.railway.app',
+  'https://patient-education-production.up.railway.app',
+  'https://revila-montage-frontend-b.up.railway.app',
   process.env.FRONTEND_URL // URL du frontend sur Railway
 ].filter(Boolean);
 
+console.log('🌐 CORS allowed origins:', allowedOrigins);
+
 app.use(cors({
-  origin: allowedOrigins,
-  methods: ['GET', 'POST', 'OPTIONS'],
-  credentials: true
+  origin: function(origin, callback) {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      console.log('✅ CORS allowed (explicit):', origin);
+      return callback(null, true);
+    }
+    
+    // Check if origin matches Railway pattern
+    if (origin.match(/^https:\/\/.*\.up\.railway\.app$/)) {
+      console.log('✅ CORS allowed (Railway pattern):', origin);
+      return callback(null, true);
+    }
+    
+    console.log('❌ CORS blocked origin:', origin);
+    return callback(new Error('CORS policy violation'));
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true,
+  optionsSuccessStatus: 200
 }));
 
 app.use(express.json());
@@ -72,8 +97,31 @@ const upload = multer({
   limits: { fileSize: 100 * 1024 * 1024 } // 100MB max
 });
 
+// Test endpoint for CORS
+app.get('/api/test', (req, res) => {
+  console.log('🧪 Test endpoint called from:', req.headers.origin);
+  res.json({ 
+    status: 'success',
+    message: 'Test endpoint working',
+    origin: req.headers.origin || 'no origin',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.post('/api/test', (req, res) => {
+  console.log('🧪 Test POST endpoint called from:', req.headers.origin);
+  res.json({ 
+    status: 'success',
+    message: 'Test POST endpoint working',
+    data: req.body,
+    origin: req.headers.origin || 'no origin',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Endpoint de test
 app.get('/api/health', (req, res) => {
+  console.log('🏥 Health check requested from:', req.headers.origin);
   res.json({ status: 'OK', message: 'Video editor backend is running' });
 });
 
