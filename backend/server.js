@@ -173,6 +173,149 @@ app.get('/api/test-route', (req, res) => {
   res.json({ message: 'Test route working' });
 });
 
+// Test FFmpeg simple - Génère un fichier audio de test
+app.get('/api/test-ffmpeg-simple', async (req, res) => {
+  console.log('🎵 Test FFmpeg simple requested');
+  
+  try {
+    const outputFilename = `test-audio-${Date.now()}.mp3`;
+    const outputPath = path.join(outputDir, outputFilename);
+    
+    // Créer un fichier audio de test (1 seconde de silence)
+    await new Promise((resolve, reject) => {
+      ffmpeg()
+        .input('anullsrc=channel_layout=stereo:sample_rate=44100')
+        .inputFormat('lavfi')
+        .duration(1)
+        .audioCodec('mp3')
+        .output(outputPath)
+        .on('end', resolve)
+        .on('error', reject)
+        .on('start', cmd => console.log('FFmpeg command:', cmd))
+        .run();
+    });
+    
+    console.log('✅ Test audio generated:', outputFilename);
+    
+    // Envoyer le fichier
+    res.download(outputPath, outputFilename, (err) => {
+      if (err) console.error('Download error:', err);
+      // Nettoyer après 5 secondes
+      setTimeout(async () => {
+        try {
+          await fs.unlink(outputPath);
+          console.log('🧹 Cleaned test file:', outputFilename);
+        } catch (e) {}
+      }, 5000);
+    });
+    
+  } catch (error) {
+    console.error('❌ FFmpeg test error:', error);
+    res.status(500).json({ 
+      error: 'FFmpeg test failed', 
+      details: error.message 
+    });
+  }
+});
+
+// Test FFmpeg conversion - Convertit un fichier uploadé
+app.post('/api/test-ffmpeg-conversion', upload.single('file'), async (req, res) => {
+  console.log('🔄 Test FFmpeg conversion requested');
+  
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file provided' });
+    }
+    
+    const inputFile = req.file;
+    console.log('📁 Input file:', inputFile.originalname, inputFile.mimetype);
+    
+    let outputExt, outputCodec;
+    
+    // Déterminer le type de conversion
+    if (inputFile.mimetype.startsWith('video/')) {
+      // Video -> Audio (MP3)
+      outputExt = 'mp3';
+      outputCodec = 'mp3';
+      console.log('🎬➡️🎵 Converting video to audio');
+    } else if (inputFile.mimetype.startsWith('audio/')) {
+      // Audio -> Video (MP4 avec image noire)
+      outputExt = 'mp4';
+      outputCodec = 'libx264';
+      console.log('🎵➡️🎬 Converting audio to video');
+    } else {
+      await fs.unlink(inputFile.path);
+      return res.status(400).json({ error: 'File must be audio or video' });
+    }
+    
+    const outputFilename = `converted-${Date.now()}.${outputExt}`;
+    const outputPath = path.join(outputDir, outputFilename);
+    
+    await new Promise((resolve, reject) => {
+      let command = ffmpeg(inputFile.path);
+      
+      if (inputFile.mimetype.startsWith('video/')) {
+        // Extraire l'audio seulement
+        command
+          .noVideo()
+          .audioCodec(outputCodec)
+          .audioBitrate('192k');
+      } else {
+        // Créer une vidéo avec image noire
+        command
+          .input('color=c=black:s=1280x720:d=10')
+          .inputFormat('lavfi')
+          .complexFilter('[1:a][0:v]shortest=1[out]')
+          .map('[out]')
+          .videoCodec(outputCodec)
+          .audioCodec('aac');
+      }
+      
+      command
+        .output(outputPath)
+        .on('start', cmd => console.log('FFmpeg command:', cmd))
+        .on('progress', progress => {
+          console.log('Progress:', Math.round(progress.percent || 0) + '%');
+        })
+        .on('end', resolve)
+        .on('error', reject)
+        .run();
+    });
+    
+    console.log('✅ Conversion completed:', outputFilename);
+    
+    // Nettoyer le fichier d'entrée
+    await fs.unlink(inputFile.path);
+    
+    // Envoyer le fichier converti
+    res.download(outputPath, outputFilename, (err) => {
+      if (err) console.error('Download error:', err);
+      // Nettoyer après 5 secondes
+      setTimeout(async () => {
+        try {
+          await fs.unlink(outputPath);
+          console.log('🧹 Cleaned converted file:', outputFilename);
+        } catch (e) {}
+      }, 5000);
+    });
+    
+  } catch (error) {
+    console.error('❌ Conversion error:', error);
+    
+    // Nettoyer le fichier uploadé en cas d'erreur
+    if (req.file) {
+      try {
+        await fs.unlink(req.file.path);
+      } catch (e) {}
+    }
+    
+    res.status(500).json({ 
+      error: 'Conversion failed', 
+      details: error.message 
+    });
+  }
+});
+
 // Endpoint de test simple sans FFmpeg
 console.log('Registering /api/simple-export endpoint');
 app.post('/api/simple-export', upload.array('files'), async (req, res) => {
@@ -434,6 +577,228 @@ app.post('/api/combine', upload.array('files'), async (req, res) => {
   } catch (error) {
     console.error('Combine error:', error);
     res.status(500).json({ error: 'Combine failed', details: error.message });
+  }
+});
+
+// Endpoint GET pour générer un fichier audio de test (1 seconde de silence)
+app.get('/api/test-ffmpeg-simple', async (req, res) => {
+  try {
+    console.log('🎵 Test FFmpeg simple endpoint called');
+    
+    const outputFilename = `test-audio-${Date.now()}.mp3`;
+    const outputPath = path.join(outputDir, outputFilename);
+
+    let command;
+    try {
+      command = ffmpeg();
+    } catch (ffmpegError) {
+      console.error('Failed to create FFmpeg command for test:', ffmpegError);
+      return res.status(500).json({ 
+        error: 'FFmpeg not available', 
+        details: ffmpegError.message 
+      });
+    }
+
+    // Générer 1 seconde de silence
+    command
+      .input('anullsrc=channel_layout=stereo:sample_rate=44100')
+      .inputOptions(['-f lavfi', '-t 1'])
+      .audioCodec('mp3')
+      .audioBitrate('128k')
+      .output(outputPath);
+
+    command.on('start', (commandLine) => {
+      console.log('FFmpeg test command started:', commandLine);
+    });
+
+    command.on('error', (err) => {
+      console.error('FFmpeg test error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ 
+          error: 'Test audio generation failed', 
+          details: err.message 
+        });
+      }
+    });
+
+    command.on('end', async () => {
+      console.log('Test audio generation completed');
+      
+      // Envoyer le fichier au client
+      res.download(outputPath, outputFilename, async (err) => {
+        if (err) {
+          console.error('Download error:', err);
+        }
+        // Nettoyer le fichier après téléchargement
+        setTimeout(async () => {
+          try {
+            await fs.unlink(outputPath);
+            console.log('Test audio file cleaned up:', outputFilename);
+          } catch (err) {
+            console.error('Error deleting test audio file:', err);
+          }
+        }, 5000);
+      });
+    });
+
+    command.run();
+
+  } catch (error) {
+    console.error('Test FFmpeg simple error:', error);
+    res.status(500).json({ 
+      error: 'Test failed', 
+      details: error.message 
+    });
+  }
+});
+
+// Endpoint POST pour convertir un fichier (vidéo vers MP3 ou audio vers MP4)
+app.post('/api/test-ffmpeg-conversion', upload.single('file'), async (req, res) => {
+  try {
+    console.log('🔄 Test FFmpeg conversion endpoint called');
+    
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const inputFile = req.file;
+    console.log('Processing file:', {
+      originalName: inputFile.originalname,
+      mimetype: inputFile.mimetype,
+      size: inputFile.size
+    });
+
+    // Déterminer le format de sortie basé sur le type d'entrée
+    let outputExtension, outputCodec, isAudioOutput;
+    
+    if (inputFile.mimetype.startsWith('video/')) {
+      // Vidéo vers MP3 (audio)
+      outputExtension = 'mp3';
+      outputCodec = 'mp3';
+      isAudioOutput = true;
+    } else if (inputFile.mimetype.startsWith('audio/')) {
+      // Audio vers MP4 (vidéo avec image statique)
+      outputExtension = 'mp4';
+      outputCodec = 'libx264';
+      isAudioOutput = false;
+    } else {
+      return res.status(400).json({ 
+        error: 'Unsupported file type. Please upload a video or audio file.' 
+      });
+    }
+
+    const outputFilename = `converted-${Date.now()}.${outputExtension}`;
+    const outputPath = path.join(outputDir, outputFilename);
+
+    let command;
+    try {
+      command = ffmpeg();
+    } catch (ffmpegError) {
+      console.error('Failed to create FFmpeg command for conversion:', ffmpegError);
+      return res.status(500).json({ 
+        error: 'FFmpeg not available', 
+        details: ffmpegError.message 
+      });
+    }
+
+    command.input(inputFile.path);
+
+    if (isAudioOutput) {
+      // Conversion vidéo vers MP3
+      command
+        .noVideo()
+        .audioCodec('mp3')
+        .audioBitrate('128k')
+        .audioFrequency(44100);
+    } else {
+      // Conversion audio vers MP4 avec une image statique noire
+      command
+        .input('color=black:size=640x480:duration=0')
+        .inputOptions(['-f lavfi'])
+        .videoCodec('libx264')
+        .audioCodec('aac')
+        .audioBitrate('128k')
+        .outputOptions([
+          '-preset fast',
+          '-crf 23',
+          '-pix_fmt yuv420p',
+          '-shortest' // Arrêter quand l'audio se termine
+        ]);
+    }
+
+    command.output(outputPath);
+
+    command.on('start', (commandLine) => {
+      console.log('FFmpeg conversion command started:', commandLine);
+    });
+
+    command.on('progress', (progress) => {
+      console.log('Conversion progress: ' + Math.round(progress.percent || 0) + '% done');
+    });
+
+    command.on('error', async (err) => {
+      console.error('FFmpeg conversion error:', err);
+      
+      // Nettoyer le fichier d'entrée
+      try {
+        await fs.unlink(inputFile.path);
+      } catch (cleanupErr) {
+        console.error('Error cleaning up input file:', cleanupErr);
+      }
+      
+      if (!res.headersSent) {
+        res.status(500).json({ 
+          error: 'File conversion failed', 
+          details: err.message 
+        });
+      }
+    });
+
+    command.on('end', async () => {
+      console.log('File conversion completed');
+      
+      // Nettoyer le fichier d'entrée
+      try {
+        await fs.unlink(inputFile.path);
+      } catch (err) {
+        console.error('Error deleting input file:', err);
+      }
+
+      // Envoyer le fichier converti
+      res.download(outputPath, outputFilename, async (err) => {
+        if (err) {
+          console.error('Download error:', err);
+        }
+        // Nettoyer le fichier de sortie après téléchargement
+        setTimeout(async () => {
+          try {
+            await fs.unlink(outputPath);
+            console.log('Converted file cleaned up:', outputFilename);
+          } catch (err) {
+            console.error('Error deleting converted file:', err);
+          }
+        }, 5000);
+      });
+    });
+
+    command.run();
+
+  } catch (error) {
+    console.error('Test FFmpeg conversion error:', error);
+    
+    // Nettoyer le fichier d'entrée si il existe
+    if (req.file) {
+      try {
+        await fs.unlink(req.file.path);
+      } catch (cleanupErr) {
+        console.error('Error cleaning up input file after error:', cleanupErr);
+      }
+    }
+    
+    res.status(500).json({ 
+      error: 'Conversion test failed', 
+      details: error.message 
+    });
   }
 });
 
