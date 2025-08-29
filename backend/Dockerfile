@@ -1,8 +1,12 @@
 # Use Node.js base image
 FROM node:18-alpine
 
-# Install FFmpeg
-RUN apk add --no-cache ffmpeg
+# Install FFmpeg and required dependencies
+RUN apk update && \
+    apk add --no-cache \
+    ffmpeg \
+    ffmpeg-libs \
+    && ffmpeg -version
 
 # Set working directory
 WORKDIR /app
