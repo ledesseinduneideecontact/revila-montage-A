@@ -173,6 +173,87 @@ app.get('/api/test-route', (req, res) => {
   res.json({ message: 'Test route working' });
 });
 
+// Test ultra-simple - Génère un fichier WAV sans aucune dépendance
+app.get('/api/test-simple-audio', async (req, res) => {
+  console.log('🎵 Ultra-simple audio test requested');
+  
+  try {
+    const outputFilename = `test-audio-${Date.now()}.wav`;
+    const outputPath = path.join(outputDir, outputFilename);
+    
+    // Créer un fichier WAV simple (44 bytes header + 1 seconde de silence)
+    const sampleRate = 8000; // Taux d'échantillonnage simple
+    const numChannels = 1; // Mono
+    const bitsPerSample = 8; // 8 bits
+    const duration = 1; // 1 seconde
+    const numSamples = sampleRate * duration;
+    const dataSize = numSamples * numChannels * (bitsPerSample / 8);
+    
+    // Créer le buffer WAV
+    const buffer = Buffer.alloc(44 + dataSize);
+    
+    // RIFF header
+    buffer.write('RIFF', 0);
+    buffer.writeUInt32LE(36 + dataSize, 4);
+    buffer.write('WAVE', 8);
+    
+    // fmt chunk
+    buffer.write('fmt ', 12);
+    buffer.writeUInt32LE(16, 16);
+    buffer.writeUInt16LE(1, 20); // PCM
+    buffer.writeUInt16LE(numChannels, 22);
+    buffer.writeUInt32LE(sampleRate, 24);
+    buffer.writeUInt32LE(sampleRate * numChannels * bitsPerSample / 8, 28);
+    buffer.writeUInt16LE(numChannels * bitsPerSample / 8, 32);
+    buffer.writeUInt16LE(bitsPerSample, 34);
+    
+    // data chunk
+    buffer.write('data', 36);
+    buffer.writeUInt32LE(dataSize, 40);
+    
+    // Remplir avec du silence (128 pour 8-bit PCM)
+    for (let i = 44; i < buffer.length; i++) {
+      buffer[i] = 128;
+    }
+    
+    // Écrire le fichier
+    await fs.writeFile(outputPath, buffer);
+    console.log('✅ Simple WAV file created:', outputFilename, '- Size:', buffer.length, 'bytes');
+    
+    // Envoyer le fichier
+    res.download(outputPath, outputFilename, (err) => {
+      if (err) {
+        console.error('❌ Download error:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Download failed', details: err.message });
+        }
+      } else {
+        console.log('✅ File sent successfully');
+      }
+      
+      // Nettoyer après 5 secondes
+      setTimeout(async () => {
+        try {
+          await fs.unlink(outputPath);
+          console.log('🧹 Cleaned test file:', outputFilename);
+        } catch (e) {
+          console.log('Could not clean file:', e.message);
+        }
+      }, 5000);
+    });
+    
+  } catch (error) {
+    console.error('❌ Simple audio test error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        error: 'Simple audio test failed', 
+        details: error.message,
+        stack: error.stack
+      });
+    }
+  }
+});
+
 // Test FFmpeg simple - Génère un fichier audio de test
 app.get('/api/test-ffmpeg-simple', async (req, res) => {
   console.log('🎵 Test FFmpeg simple requested');

@@ -106,7 +106,9 @@ const TestPage: React.FC = () => {
 
     try {
       const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-      const response = await fetch(`${apiUrl}/test-ffmpeg-simple`, {
+      
+      // Essayer d'abord l'endpoint simple qui ne nécessite pas FFmpeg
+      let response = await fetch(`${apiUrl}/test-simple-audio`, {
         method: 'GET'
       });
 
