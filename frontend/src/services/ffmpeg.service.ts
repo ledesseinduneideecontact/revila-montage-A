@@ -23,15 +23,36 @@ class FFmpegService {
         console.log('FFmpeg:', message);
       });
 
-      // Utiliser toBlobURL pour charger les fichiers WASM
+      // Charger FFmpeg directement depuis le CDN sans blob URLs
+      // Cela évite les problèmes de CSP avec les blob URLs
       const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm';
-      const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
-      const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
-
-      await this.ffmpeg.load({
-        coreURL,
-        wasmURL,
-      });
+      
+      try {
+        // Essayer de charger avec les URLs directes
+        await this.ffmpeg.load({
+          coreURL: `${baseURL}/ffmpeg-core.js`,
+          wasmURL: `${baseURL}/ffmpeg-core.wasm`,
+          workerURL: `${baseURL}/ffmpeg-core.worker.js`
+        });
+      } catch (directLoadError) {
+        console.warn('Direct load failed, trying with blob URLs:', directLoadError);
+        
+        // Si le chargement direct échoue, essayer avec les blob URLs
+        try {
+          const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript');
+          const wasmURL = await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm');
+          const workerURL = await toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, 'text/javascript');
+          
+          await this.ffmpeg.load({
+            coreURL,
+            wasmURL,
+            workerURL
+          });
+        } catch (blobError) {
+          console.error('Both loading methods failed');
+          throw blobError;
+        }
+      }
 
       this.loaded = true;
       console.log('FFmpeg loaded successfully');
